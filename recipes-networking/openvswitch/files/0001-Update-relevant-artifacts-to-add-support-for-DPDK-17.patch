@@ -1,0 +1,500 @@
+From d08a2a56ae48dea3ce725f330a89f38a99d614d2 Mon Sep 17 00:00:00 2001
+From: Michal Weglicki <michalx.weglicki@intel.com>
+Date: Tue, 1 Aug 2017 16:14:10 -0700
+Subject: [PATCH] Update relevant artifacts to add support for DPDK 17.05.1.
+
+Upgrading to DPDK 17.05.1 stable release adds new
+significant features relevant to OVS, including,
+but not limited to:
+- tun/tap PMD,
+- VFIO hotplug support,
+- Generic flow API.
+
+Following changes are applied:
+- netdev-dpdk: Changes required by DPDK API modifications.
+- doc: Because of DPDK API changes, backward compatibility
+  with previous DPDK releases will be broken, thus all
+  relevant documentation entries are updated.
+- .travis: DPDK version change from 16.11.1 to 17.05.1.
+- rhel/openvswitch-fedora.spec.in: DPDK version change
+  from 16.11 to 17.05.1
+
+Signed-off-by: Michal Weglicki <michalx.weglicki@intel.com>
+Acked-by: Kevin Traynor <ktraynor@redhat.com>
+Acked-by: Mark Kavanagh <mark.b.kavanagh@intel.com>
+Tested-by: Ian Stokes <ian.stokes@intel.com>
+Acked-by: Aaron Conole <aconole@redhat.com>
+Signed-off-by: Darrell Ball <dlu998@gmail.com>
+Signed-off-by: Ben Pfaff <blp@ovn.org>
+
+Upstream-Status: Backport [https://github.com/openvswitch/ovs/commit/
+f3e7ec254738364101eed8f04b1d954cb510615c]
+
+Signed-off-by: He Zhe <zhe.he@windriver.com>
+---
+ .travis/linux-build.sh                   |   2 +-
+ Documentation/faq/releases.rst           |   1 +
+ Documentation/howto/dpdk.rst             |   8 +-
+ Documentation/intro/install/dpdk.rst     |  14 +--
+ Documentation/topics/dpdk/vhost-user.rst |  12 +--
+ NEWS                                     |   5 ++
+ lib/netdev-dpdk.c                        | 147 +++++++++++++++++++------------
+ rhel/openvswitch-fedora.spec.in          |   2 +-
+ tests/dpdk/ring_client.c                 |   6 +-
+ 9 files changed, 120 insertions(+), 77 deletions(-)
+
+diff --git a/.travis/linux-build.sh b/.travis/linux-build.sh
+index f66b53413..efccdf141 100755
+--- a/.travis/linux-build.sh
++++ b/.travis/linux-build.sh
+@@ -80,7 +80,7 @@ fi
+ 
+ if [ "$DPDK" ]; then
+     if [ -z "$DPDK_VER" ]; then
+-        DPDK_VER="16.11.2"
++        DPDK_VER="17.05.1"
+     fi
+     install_dpdk $DPDK_VER
+     if [ "$CC" = "clang" ]; then
+diff --git a/Documentation/faq/releases.rst b/Documentation/faq/releases.rst
+index fcd23fbed..a0a7f7089 100644
+--- a/Documentation/faq/releases.rst
++++ b/Documentation/faq/releases.rst
+@@ -161,6 +161,7 @@ Q: What DPDK version does each Open vSwitch release work with?
+     2.5.x        2.2
+     2.6.x        16.07.2
+     2.7.x        16.11.2
++    2.7.x        17.05.1
+     ============ =======
+ 
+ Q: I get an error like this when I configure Open vSwitch::
+diff --git a/Documentation/howto/dpdk.rst b/Documentation/howto/dpdk.rst
+index 653c77594..16db33698 100644
+--- a/Documentation/howto/dpdk.rst
++++ b/Documentation/howto/dpdk.rst
+@@ -320,7 +320,7 @@ port using the del-port command, then it can be detached using::
+ 
+     $ ovs-appctl netdev-dpdk/detach 0000:01:00.0
+ 
+-This feature is not supported with VFIO and does not work with some NICs.
++This feature does not work with some NICs.
+ For more information please refer to the `DPDK Port Hotplug Framework
+ <http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.
+ 
+@@ -489,15 +489,15 @@ described in :ref:`dpdk-testpmd`. Once compiled, run the application::
+ 
+ When you finish testing, bind the vNICs back to kernel::
+ 
+-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
+-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
++    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
++    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
+ 
+ .. note::
+ 
+   Valid PCI IDs must be passed in above example. The PCI IDs can be retrieved
+   like so::
+ 
+-      $ $DPDK_DIR/tools/dpdk-devbind.py --status
++      $ $DPDK_DIR/usertools/dpdk-devbind.py --status
+ 
+ More information on the dpdkvhostuser ports can be found in
+ :doc:`/topics/dpdk/vhost-user`.
+diff --git a/Documentation/intro/install/dpdk.rst b/Documentation/intro/install/dpdk.rst
+index 92052afac..daa3ef4c2 100644
+--- a/Documentation/intro/install/dpdk.rst
++++ b/Documentation/intro/install/dpdk.rst
+@@ -35,7 +35,7 @@ Build requirements
+ In addition to the requirements described in :doc:`general`, building Open
+ vSwitch with DPDK will require the following:
+ 
+-- DPDK 16.11
++- DPDK 17.05.1
+ 
+ - A `DPDK supported NIC`_
+ 
+@@ -64,9 +64,9 @@ Install DPDK
+ #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
+ 
+        $ cd /usr/src/
+-       $ wget http://fast.dpdk.org/rel/dpdk-16.11.2.tar.xz
+-       $ tar xf dpdk-16.11.2.tar.xz
+-       $ export DPDK_DIR=/usr/src/dpdk-stable-16.11.2
++       $ wget http://fast.dpdk.org/rel/dpdk-17.05.1.tar.xz
++       $ tar xf dpdk-17.05.1.tar.xz
++       $ export DPDK_DIR=/usr/src/dpdk-stable-17.05.1
+        $ cd $DPDK_DIR
+ 
+ #. (Optional) Configure DPDK as a shared library
+@@ -182,8 +182,8 @@ to the VFIO driver::
+     $ modprobe vfio-pci
+     $ /usr/bin/chmod a+x /dev/vfio
+     $ /usr/bin/chmod 0666 /dev/vfio/*
+-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=vfio-pci eth1
+-    $ $DPDK_DIR/tools/dpdk-devbind.py --status
++    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=vfio-pci eth1
++    $ $DPDK_DIR/usertools/dpdk-devbind.py --status
+ 
+ Setup OVS
+ ~~~~~~~~~
+@@ -563,7 +563,7 @@ Limitations
+   The latest list of validated firmware versions can be found in the `DPDK
+   release notes`_.
+ 
+-.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_16_11.html
++.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_05.html
+ 
+ Reporting Bugs
+ --------------
+diff --git a/Documentation/topics/dpdk/vhost-user.rst b/Documentation/topics/dpdk/vhost-user.rst
+index 690cdb004..50d67db3c 100644
+--- a/Documentation/topics/dpdk/vhost-user.rst
++++ b/Documentation/topics/dpdk/vhost-user.rst
+@@ -278,9 +278,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
+ DPDK sources to VM and build DPDK::
+ 
+     $ cd /root/dpdk/
+-    $ wget http://fast.dpdk.org/rel/dpdk-16.11.2.tar.xz
+-    $ tar xf dpdk-16.11.2.tar.xz
+-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-16.11.2
++    $ wget http://fast.dpdk.org/rel/dpdk-17.05.1.tar.xz
++    $ tar xf dpdk-17.05.1.tar.xz
++    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.1
+     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
+     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
+     $ cd $DPDK_DIR
+@@ -300,8 +300,8 @@ Setup huge pages and DPDK devices using UIO::
+     $ mount -t hugetlbfs hugetlbfs /dev/hugepages  # only if not already mounted
+     $ modprobe uio
+     $ insmod $DPDK_BUILD/kmod/igb_uio.ko
+-    $ $DPDK_DIR/tools/dpdk-devbind.py --status
+-    $ $DPDK_DIR/tools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
++    $ $DPDK_DIR/usertools/dpdk-devbind.py --status
++    $ $DPDK_DIR/usertools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
+ 
+ .. note::
+ 
+@@ -364,7 +364,7 @@ Sample XML
+         </disk>
+         <disk type='dir' device='disk'>
+           <driver name='qemu' type='fat'/>
+-          <source dir='/usr/src/dpdk-stable-16.11.2'/>
++          <source dir='/usr/src/dpdk-stable-17.05.1'/>
+           <target dev='vdb' bus='virtio'/>
+           <readonly/>
+         </disk>
+diff --git a/NEWS b/NEWS
+index 5ed122ae7..ce6e0f9d0 100644
+--- a/NEWS
++++ b/NEWS
+@@ -1,3 +1,8 @@
++Post-v2.7.1
++---------------------
++   -DPDK
++     * Support for DPDK v17.05.1.
++
+ v2.7.1 - 28 Jun 2017
+ ---------------------
+    - Fedora Packaging:
+diff --git a/lib/netdev-dpdk.c b/lib/netdev-dpdk.c
+index 858d995e9..5ddee0f93 100644
+--- a/lib/netdev-dpdk.c
++++ b/lib/netdev-dpdk.c
+@@ -22,6 +22,9 @@
+ #include <stdlib.h>
+ #include <errno.h>
+ #include <unistd.h>
++#include <linux/virtio_net.h>
++#include <sys/socket.h>
++#include <linux/if.h>
+ 
+ #include <rte_config.h>
+ #include <rte_cycles.h>
+@@ -31,7 +34,7 @@
+ #include <rte_malloc.h>
+ #include <rte_mbuf.h>
+ #include <rte_meter.h>
+-#include <rte_virtio_net.h>
++#include <rte_vhost.h>
+ 
+ #include "dirs.h"
+ #include "dp-packet.h"
+@@ -56,6 +59,8 @@
+ #include "timeval.h"
+ #include "unixctl.h"
+ 
++enum {VIRTIO_RXQ, VIRTIO_TXQ, VIRTIO_QNUM};
++
+ VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
+ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+ 
+@@ -164,6 +169,21 @@ static const struct rte_eth_conf port_conf = {
+     },
+ };
+ 
++/*
++ * These callbacks allow virtio-net devices to be added to vhost ports when
++ * configuration has been fully completed.
++ */
++static int new_device(int vid);
++static void destroy_device(int vid);
++static int vring_state_changed(int vid, uint16_t queue_id, int enable);
++static const struct vhost_device_ops virtio_net_device_ops =
++{
++    .new_device =  new_device,
++    .destroy_device = destroy_device,
++    .vring_state_changed = vring_state_changed,
++    .features_changed = NULL
++};
++
+ enum { DPDK_RING_SIZE = 256 };
+ BUILD_ASSERT_DECL(IS_POW2(DPDK_RING_SIZE));
+ enum { DRAIN_TSC = 200000ULL };
+@@ -402,8 +422,8 @@ struct netdev_rxq_dpdk {
+     int port_id;
+ };
+ 
+-static int netdev_dpdk_class_init(void);
+-static int netdev_dpdk_vhost_class_init(void);
++static void netdev_dpdk_destruct(struct netdev *netdev);
++static void netdev_dpdk_vhost_destruct(struct netdev *netdev);
+ 
+ int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
+ 
+@@ -413,8 +433,8 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
+ static bool
+ is_dpdk_class(const struct netdev_class *class)
+ {
+-    return class->init == netdev_dpdk_class_init
+-           || class->init == netdev_dpdk_vhost_class_init;
++    return class->destruct == netdev_dpdk_destruct
++           || class->destruct == netdev_dpdk_vhost_destruct;
+ }
+ 
+ /* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
+@@ -946,13 +966,45 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
+     if (err) {
+         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
+                  dev->vhost_id);
++        goto out;
+     } else {
+         fatal_signal_add_file_to_unlink(dev->vhost_id);
+         VLOG_INFO("Socket %s created for vhost-user port %s\n",
+                   dev->vhost_id, name);
+     }
+-    err = vhost_common_construct(netdev);
+ 
++    err = rte_vhost_driver_callback_register(dev->vhost_id,
++                                                &virtio_net_device_ops);
++    if (err) {
++        VLOG_ERR("rte_vhost_driver_callback_register failed for vhost user "
++                 "port: %s\n", name);
++        goto out;
++    }
++
++    err = rte_vhost_driver_disable_features(dev->vhost_id,
++                                1ULL << VIRTIO_NET_F_HOST_TSO4
++                                | 1ULL << VIRTIO_NET_F_HOST_TSO6
++                                | 1ULL << VIRTIO_NET_F_CSUM);
++    if (err) {
++        VLOG_ERR("rte_vhost_driver_disable_features failed for vhost user "
++                 "port: %s\n", name);
++        goto out;
++    }
++
++    err = rte_vhost_driver_start(dev->vhost_id);
++    if (err) {
++        VLOG_ERR("rte_vhost_driver_start failed for vhost user "
++                 "port: %s\n", name);
++        goto out;
++    }
++
++    err = vhost_common_construct(netdev);
++    if (err) {
++        VLOG_ERR("vhost_common_construct failed for vhost user "
++                 "port: %s\n", name);
++    }
++ 
++out:
+     ovs_mutex_unlock(&dpdk_mutex);
+     return err;
+ }
+@@ -964,6 +1016,10 @@ netdev_dpdk_vhost_client_construct(struct netdev *netdev)
+ 
+     ovs_mutex_lock(&dpdk_mutex);
+     err = vhost_common_construct(netdev);
++    if (err) {
++        VLOG_ERR("vhost_common_construct failed for vhost user client"
++                 "port: %s\n", netdev->name);
++    }
+     ovs_mutex_unlock(&dpdk_mutex);
+     return err;
+ }
+@@ -2483,12 +2539,9 @@ static void
+ set_irq_status(int vid)
+ {
+     uint32_t i;
+-    uint64_t idx;
+ 
+-    for (i = 0; i < rte_vhost_get_queue_num(vid); i++) {
+-        idx = i * VIRTIO_QNUM;
+-        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_RXQ, 0);
+-        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_TXQ, 0);
++    for (i = 0; i < rte_vhost_get_vring_num(vid); i++) {
++        rte_vhost_enable_guest_notification(vid, i, 0);
+     }
+ }
+ 
+@@ -2551,7 +2604,7 @@ new_device(int vid)
+     LIST_FOR_EACH(dev, list_node, &dpdk_list) {
+         ovs_mutex_lock(&dev->mutex);
+         if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
+-            uint32_t qp_num = rte_vhost_get_queue_num(vid);
++            uint32_t qp_num = rte_vhost_get_vring_num(vid)/VIRTIO_QNUM;
+ 
+             /* Get NUMA information */
+             newnode = rte_vhost_get_numa_node(vid);
+@@ -2718,27 +2771,6 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev)
+     return ovsrcu_get(struct ingress_policer *, &dev->ingress_policer);
+ }
+ 
+-/*
+- * These callbacks allow virtio-net devices to be added to vhost ports when
+- * configuration has been fully complete.
+- */
+-static const struct virtio_net_device_ops virtio_net_device_ops =
+-{
+-    .new_device =  new_device,
+-    .destroy_device = destroy_device,
+-    .vring_state_changed = vring_state_changed
+-};
+-
+-static void *
+-start_vhost_loop(void *dummy OVS_UNUSED)
+-{
+-     pthread_detach(pthread_self());
+-     /* Put the vhost thread into quiescent state. */
+-     ovsrcu_quiesce_start();
+-     rte_vhost_driver_session_start();
+-     return NULL;
+-}
+-
+ static int
+ netdev_dpdk_class_init(void)
+ {
+@@ -2761,26 +2793,6 @@ netdev_dpdk_class_init(void)
+     return 0;
+ }
+ 
+-static int
+-netdev_dpdk_vhost_class_init(void)
+-{
+-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+-
+-    /* This function can be called for different classes.  The initialization
+-     * needs to be done only once */
+-    if (ovsthread_once_start(&once)) {
+-        rte_vhost_driver_callback_register(&virtio_net_device_ops);
+-        rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
+-                                  | 1ULL << VIRTIO_NET_F_HOST_TSO6
+-                                  | 1ULL << VIRTIO_NET_F_CSUM
+-                                  | 1ULL << VIRTIO_RING_F_INDIRECT_DESC);
+-        ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
+-
+-        ovsthread_once_done(&once);
+-    }
+-
+-    return 0;
+-}
+ 
+ /* Client Rings */
+ 
+@@ -3234,6 +3246,31 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
+                       "using client socket '%s'",
+                       dev->up.name, dev->vhost_id);
+         }
++
++        err = rte_vhost_driver_callback_register(dev->vhost_id,
++                                                 &virtio_net_device_ops);
++        if (err) {
++            VLOG_ERR("rte_vhost_driver_callback_register failed for "
++                     "vhost user client port: %s\n", dev->up.name);
++            goto unlock;
++        }
++
++        err = rte_vhost_driver_disable_features(dev->vhost_id,
++                                    1ULL << VIRTIO_NET_F_HOST_TSO4
++                                    | 1ULL << VIRTIO_NET_F_HOST_TSO6
++                                    | 1ULL << VIRTIO_NET_F_CSUM);
++        if (err) {
++            VLOG_ERR("rte_vhost_driver_disable_features failed for vhost user "
++                     "client port: %s\n", dev->up.name);
++            goto unlock;
++        }
++
++        err = rte_vhost_driver_start(dev->vhost_id);
++        if (err) {
++            VLOG_ERR("rte_vhost_driver_start failed for vhost user "
++                     "client port: %s\n", dev->up.name);
++            goto unlock;
++        }
+     }
+ 
+     err = dpdk_vhost_reconfigure_helper(dev);
+@@ -3352,7 +3389,7 @@ static const struct netdev_class dpdk_ring_class =
+ static const struct netdev_class dpdk_vhost_class =
+     NETDEV_DPDK_CLASS(
+         "dpdkvhostuser",
+-        netdev_dpdk_vhost_class_init,
++        NULL,
+         netdev_dpdk_vhost_construct,
+         netdev_dpdk_vhost_destruct,
+         NULL,
+@@ -3367,7 +3404,7 @@ static const struct netdev_class dpdk_vhost_class =
+ static const struct netdev_class dpdk_vhost_client_class =
+     NETDEV_DPDK_CLASS(
+         "dpdkvhostuserclient",
+-        netdev_dpdk_vhost_class_init,
++        NULL,
+         netdev_dpdk_vhost_client_construct,
+         netdev_dpdk_vhost_destruct,
+         netdev_dpdk_vhost_client_set_config,
+diff --git a/rhel/openvswitch-fedora.spec.in b/rhel/openvswitch-fedora.spec.in
+index fc1ac634f..ee55b2c3a 100644
+--- a/rhel/openvswitch-fedora.spec.in
++++ b/rhel/openvswitch-fedora.spec.in
+@@ -83,7 +83,7 @@ BuildRequires: libcap-ng libcap-ng-devel
+ %endif
+ %if %{with dpdk}
+ BuildRequires: libpcap-devel numactl-devel
+-BuildRequires: dpdk-devel >= 16.11
++BuildRequires: dpdk-devel >= 17.05.1
+ Provides: %{name}-dpdk = %{version}-%{release}
+ %endif
+ 
+diff --git a/tests/dpdk/ring_client.c b/tests/dpdk/ring_client.c
+index 8a43c64e7..cc249f6b7 100644
+--- a/tests/dpdk/ring_client.c
++++ b/tests/dpdk/ring_client.c
+@@ -185,15 +185,15 @@ main(int argc, char *argv[])
+         /* Try dequeuing max possible packets first, if that fails, get the
+          * most we can. Loop body should only execute once, maximum.
+          */
+-        while (unlikely(rte_ring_dequeue_bulk(rx_ring, pkts, rx_pkts) != 0) &&
+-            rx_pkts > 0) {
++        while (unlikely(rte_ring_dequeue_bulk(rx_ring, pkts,
++                        rx_pkts, NULL) != 0) && rx_pkts > 0) {
+             rx_pkts = (uint16_t)RTE_MIN(rte_ring_count(rx_ring), PKT_READ_SIZE);
+         }
+ 
+         if (rx_pkts > 0) {
+             /* blocking enqueue */
+             do {
+-                rslt = rte_ring_enqueue_bulk(tx_ring, pkts, rx_pkts);
++                rslt = rte_ring_enqueue_bulk(tx_ring, pkts, rx_pkts, NULL);
+             } while (rslt == -ENOBUFS);
+         }
+     }
+-- 
+2.13.3
+

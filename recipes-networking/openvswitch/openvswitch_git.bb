@@ -46,6 +46,11 @@ SRC_URI += " \
            file://0008-AUTHORS-Add-Jason-Wessel.patch \
 "
 
+SRC_URI += " \
+           file://fix-cross-compilation-failure.patch \
+           file://0001-Update-relevant-artifacts-to-add-support-for-DPDK-17.patch \
+"
+
 LIC_FILES_CHKSUM = "file://COPYING;md5=17b2c9d4c70853a09c0e143137754b35"
 
 DPDK_INSTALL_DIR ?= "/opt/dpdk"

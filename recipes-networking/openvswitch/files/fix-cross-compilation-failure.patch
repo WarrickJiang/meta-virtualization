@@ -1,0 +1,25 @@
+openvswitch:fix cross compilation failure
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+
+Upstream-Status: Backport [https://mail.openvswitch.org/pipermail/
+ovs-dev/2016-August/322005.html]
+
+Signed-off-by: He Zhe <zhe.he@windriver.com>
+
+--- git/acinclude.m4	2017-05-14 23:52:13.031712727 -0700
++++ git/acinclude.m4	2017-05-14 23:53:48.639691817 -0700
+@@ -180,9 +180,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
+         DPDK_INCLUDE="$with_dpdk/include"
+         # If 'with_dpdk' is passed install directory, point to headers
+         # installed in $DESTDIR/$prefix/include/dpdk
+-        AC_CHECK_FILE([$DPDK_INCLUDE/rte_config.h], [],
+-                      [AC_CHECK_FILE([$DPDK_INCLUDE/dpdk/rte_config.h],
+-                                     [DPDK_INCLUDE=$DPDK_INCLUDE/dpdk], [])])
++	if test ! -e "$DPDK_INCLUDE/rte_config.h" && \
++		test -e "$DPDK_INCLUDE/dpdk/rte_config.h"; then
++		DPDK_INCLUDE=$DPDK_INCLUDE/dpdk/rte_config.h
++        fi
+         DPDK_LIB_DIR="$with_dpdk/lib"
+         ;;
+     esac
