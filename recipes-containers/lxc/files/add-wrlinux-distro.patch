@@ -1,0 +1,66 @@
+From 7389b065dda1d1cb4dc255adfed42f0653f1e495 Mon Sep 17 00:00:00 2001
+From: He Zhe <zhe.he@windriver.com>
+Date: Tue, 30 Sep 2014 14:07:58 +0800
+Subject: [PATCH] add wrlinux distro
+
+Adjust the patch(0.9.0) for new version 1.0.5.
+
+Signed-off-by: Jianchuan Wang <jianchuan.wang@windriver.com>
+
+Adjust chunk 2 and 3
+
+Signed-off-by: He Zhe <zhe.he@windriver.com>
+
+Upstream-Status: Inappropriate [These patches are just for generating WRLinux 
+container for LXC. Some configuration is not suitable for upstream.]
+
+Signed-off-by: Hongzhi.Song <hongzhi.song@windriver.com>
+---
+ configure.ac | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 8cbb468..258d1e6 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -49,8 +49,8 @@ AC_SUBST([LIBTOOL_DEPS])
+ 
+ # Detect the distribution. This is used for the default configuration and
+ # for some distro-specific build options.
+-AC_MSG_CHECKING([host distribution])
+-AC_ARG_WITH(distro, AS_HELP_STRING([--with-distro=DISTRO], [Specify the Linux distribution to target: One of redhat, oracle, centos, fedora, suse, gentoo, debian, arch, slackware, plamo, paldo, openmandriva, pardus, sparclinux, altlinux.]))
++AC_MSG_CHECKING([distribution to build for])
++AC_ARG_WITH(distro, AS_HELP_STRING([--with-distro=DISTRO], [Specify the Linux distribution to target: One of redhat, oracle, centos, fedora, suse, gentoo, debian, arch, slackware, paldo, openmandriva, pardus and wrlinux.]))
+ if type lsb_release >/dev/null 2>&1 && test "z$with_distro" = "z"; then
+ 	with_distro=`lsb_release -is`
+ fi
+@@ -86,7 +86,7 @@ case $with_distro in
+ 		distroconf=default.conf.lxcbr
+ 		distrosysconf="$sysconfdir/default"
+ 		;;
+-	redhat|centos|fedora|oracle|oracleserver|sparclinux|altlinux|suse|opensuse*|plamo)
++	redhat|centos|fedora|oracle|oracleserver|sparclinux|altlinux|suse|opensuse*|plamo|wrlinux)
+ 		distroconf=default.conf.lxcbr
+ 		distrosysconf="$sysconfdir/sysconfig"
+ 		;;
+@@ -95,7 +95,7 @@ case $with_distro in
+ 		distrosysconf="$sysconfdir/default"
+ 		;;
+ esac
+-AC_MSG_RESULT([$with_distro])
++AC_MSG_RESULT([distro is $with_distro])
+ AM_CONDITIONAL([HAVE_DEBIAN], [test x"$with_distro" = "xdebian" -o x"$with_distro" = "xubuntu" -o x"$with_distro" = "xraspbian"])
+ AM_CONDITIONAL([DISTRO_UBUNTU], [test "x$with_distro" = "xubuntu"])
+ 
+@@ -113,7 +113,7 @@ case "$with_init_script" in
+ 			fedora|altlinux|opensuse*)
+ 				init_script=systemd
+ 				;;
+-			redhat|oracle|oracleserver|sparclinux|plamo)
++			redhat|oracle|oracleserver|sparclinux|plamo|wrlinux)
+ 				init_script=sysvinit
+ 				;;
+ 			centos)
+-- 
+2.8.1
+
