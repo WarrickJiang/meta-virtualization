@@ -39,6 +39,10 @@ SRC_URI = "http://linuxcontainers.org/downloads/${BPN}-${PV}.tar.gz \
 	file://logs-optionally-use-base-filenames-to-report-src-fil.patch \
 	file://cgroups-work-around-issue-in-gcc-7.patch \
 	file://dnsmasq.conf \
+    file://add-wrlinux-distro.patch \
+    file://lxc-Add-template-script-for-WRLinux.patch \
+    file://lxc-Tweak-lxc-template-script-for-systemd-sysvinit.patch \
+    file://lxc-Add-container-name-check-in-lxc-wrlinux.patch \
 	"
 
 SRC_URI[md5sum] = "7bfd95280522d7936c0979dfea92cdb5"

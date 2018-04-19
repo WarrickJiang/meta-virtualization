@@ -1,0 +1,107 @@
+From d5ab093df911fc69566d4742fcc74f54bbe33dc1 Mon Sep 17 00:00:00 2001
+From: Yang Shi <yang.shi@windriver.com>
+Date: Mon, 13 Oct 2014 14:07:40 -0700
+Subject: [PATCH 4/4] lxc: Tweak lxc template script for systemd/sysvinit
+
+Tweak the script to make it work for both systemd and sysvinit.
+
+Add "-i <init_method>" parameter. If sysvinit guest is used, "-i sysvinit" need
+to be passed. The default init is systemd.
+
+The below systemd specific changes are added:
+Add "lxc.autodev=1" since LXC will create its own device tree.
+Add "lxc.kmsg=0" to prevent lxc symlinks /dev/kmsg to /dev/console, this leads
+to journald running 100% cpu usage all the time.
+Remove unnecessary mount entry in fstab.
+
+Signed-off-by: Yang Shi <yang.shi@windriver.com>
+
+Upstream-Status: Inappropriate [These patches are just for generating WRLinux
+container for LXC. Some configuration is not suitable for upstream.]
+ 
+Signed-off-by: Hongzhi.Song <hongzhi.song@windriver.com>
+---
+ templates/lxc-wrlinux.in | 29 +++++++++++++++++++++++++----
+ 1 file changed, 25 insertions(+), 4 deletions(-)
+
+diff --git a/templates/lxc-wrlinux.in b/templates/lxc-wrlinux.in
+index fc4e5aa..f038ee1 100644
+--- a/templates/lxc-wrlinux.in
++++ b/templates/lxc-wrlinux.in
+@@ -30,8 +30,10 @@ default_profile=default
+ 
+ configure_wrlinux()
+ {
+-    # Tweak initscripts
+-    sed -i 's/^\(si::sysinit:\/etc\/init.d\/rcS\)/# \1/' ${rootfs_path}/etc/inittab
++    if [ "${init_method}" == "sysvinit" ]; then
++        # Tweak initscripts
++        sed -i 's/^\(si::sysinit:\/etc\/init.d\/rcS\)/# \1/' ${rootfs_path}/etc/inittab
++    fi
+ 
+     # Touch file for fastboot
+     dev_path="${rootfs_path}/dev"
+@@ -78,6 +80,8 @@ copy_configuration()
+ 
+     mkdir -p $config_path
+     grep -q "^lxc.rootfs" $config_path/config 2>/dev/null || echo "lxc.rootfs = $rootfs_path" >> $config_path/config
++
++    if [ "${init_method}" == "sysvinit" ]; then
+     cat <<EOF >> $config_path/config
+ lxc.utsname = $name
+ lxc.tty = 6
+@@ -91,6 +95,21 @@ none            $rootfs_path/sys          sysfs   defaults  0 0
+ none            $rootfs_path/dev/pts      devpts  defaults  0 0
+ none            $rootfs_path/dev/shm      tmpfs   defaults  0 0
+ EOF
++    # systemd
++    else
++    cat <<EOF >> $config_path/config
++lxc.utsname = $name
++lxc.autodev=1
++lxc.kmsg=0
++lxc.tty = 6
++lxc.pts = 1024
++lxc.mount = $config_path/fstab
++EOF
++
++    cat <<EOF > $config_path/fstab
++none            $rootfs_path/sys          sysfs   defaults  0 0
++EOF
++    fi
+ 
+     if [ $? -ne 0 ]; then
+         echo "Failed to add configuration"
+@@ -110,18 +129,19 @@ usage()
+     cat <<EOF
+ usage:
+     $1 -n|--name=<container_name>
+-        [-p|--path=<path>] [-r|--rootfs=<path>] [-h|--help]
++        [-p|--path=<path>] [-r|--rootfs=<path>] [-i|--init=<init_method>] [-h|--help]
+ Mandatory args:
+   -n,--name         container name, used to as an identifier for that container from now on
+ Optional args:
+   -p,--path         path to where the container will be created, defaults to @LXCPATH@. The container config will go under @LXCPATH@ in that case
+   -r,--rootfs       path for actual container rootfs, (${default_path}/rootfs)
++  -i,--init         init method used by system, systemd or sysvinit
+   -h,--help         print this help
+ EOF
+     return 0
+ }
+ 
+-options=$(getopt -o hp:n:r: -l help,path:,name:,rootfs: -- "$@")
++options=$(getopt -o hp:n:r:i: -l help,path:,name:,rootfs:,init: -- "$@")
+ if [ $? -ne 0 ]; then
+     usage $(basename $0)
+     exit 1
+@@ -135,6 +155,7 @@ do
+         -p|--path)      path=$2; shift 2;;
+         -r|--rootfs)    rootfs=$2; shift 2;;
+         -n|--name)      name=$2; shift 2;;
++        -i|--init)      init_method=$2; shift 2;;
+         --)             shift 1; break ;;
+         *)              break ;;
+     esac
+-- 
+2.11.0
+
